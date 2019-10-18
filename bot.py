@@ -1,27 +1,36 @@
+import re
 from logging import getLogger
 
 from telegram import Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 
 from config.settings import *
-from utils import User, DB
+from utils import User, DB, save_to_db
 
 logger = getLogger("general")
 users = User()
 db = DB()
 
 
+@save_to_db(db)
 def start(update: Update, context):
-    logger.info(f"New request. Command start, source: {update.message.text}")
+    logger.info(f"New start request from {update.message.chat.username}[{update.message.chat.id}]. Source: {update.message.text}")
     update.message.reply_text("You are gay.")
 
 
 def echo(update, context):
+    logger.info(f"New echo request from {update.message.chat.username}[{update.message.chat.id}]. Source: {update.message.text}")
     update.message.reply_text(update.message.text)
 
 
 def auth(update, context):
-    pass
+    logger.info(f"New auth request from {update.message.chat.username}[{update.message.chat.id}]. Source: {update.message.text}")
+    if re.match("^/start +.* *$", update.message.text) is None:
+
+        message = ""
+    else:
+        message = ""
+    update.message.reply_text(message)
 
 
 def error(update, context):

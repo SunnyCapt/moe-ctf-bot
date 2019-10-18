@@ -1,4 +1,5 @@
 import sqlite3
+from functools import wraps
 from logging import getLogger
 from config.settings import *
 
@@ -32,6 +33,12 @@ class User:
 
 class DB:
     SELECT_TABLES_SQL = "select * from sqlite_master where type = 'table'"
+    _instances = {}
+
+    def __new__(cls, *args, **kwargs):
+        if PATH_TO_BOT_DB not in cls._instances:
+            cls._instances.update({PATH_TO_BOT_DB: super(DB, cls).__new__(cls, *args, **kwargs)})
+        return cls._instances.get(PATH_TO_BOT_DB)
 
     def __init__(self, db_path=PATH_TO_BOT_DB):
         self._conn = sqlite3.connect(db_path)
@@ -42,3 +49,12 @@ class DB:
 
     def commit(self):
         self._conn.commit()
+
+
+def save_to_db(func, db):
+    @wraps(func)
+    def inner(*args, **kwargs):
+        db.execute(f"")
+        db.commit()
+    return inner
+
