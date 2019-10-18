@@ -1,6 +1,8 @@
+import json
 import sqlite3
 from functools import wraps
-from logging import getLogger
+from logging import getLogger, Logger
+from ast import literal_eval
 from config.settings import *
 
 logger = getLogger("general")
@@ -15,14 +17,17 @@ class User:
         logger.info("Updating tokens")
         with open(self._file_path) as data:
             for line in data.readlines():
+                line = line.strip("\n").strip("\r").strip()
+                if not line:
+                    continue
                 try:
-                    key, value = line.rstrip("\n").rstrip("\r").split(" ")
-                    self._users.update({key, value})
+                    key, value = line.split(" ")
+                    self._users.update({key: value})
                 except Exception as exc:
                     logger.error(f"Wrong token-user_name value in {self._file_path}: {line} [{exc}]")
         logger.info("Updated tokens")
 
-    def get_user_name(self, token):
+    def get_user_name(self, token) -> "user_name or None":
         user_name = self._users.get(token)
         if user_name is not None:
             return user_name
@@ -32,29 +37,37 @@ class User:
 
 
 class DB:
-    SELECT_TABLES_SQL = "select * from sqlite_master where type = 'table'"
-    _instances = {}
-
-    def __new__(cls, *args, **kwargs):
-        if PATH_TO_BOT_DB not in cls._instances:
-            cls._instances.update({PATH_TO_BOT_DB: super(DB, cls).__new__(cls, *args, **kwargs)})
-        return cls._instances.get(PATH_TO_BOT_DB)
-
     def __init__(self, db_path=PATH_TO_BOT_DB):
-        self._conn = sqlite3.connect(db_path)
-        self._cursor = self._conn.cursor()
+        self.db_path = db_path
 
-    def execute(self, *args, **kwargs):
-        return self._cursor.execute(*args, **kwargs)
+    def execute(self, sql, need_commit=False):
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            result = cursor.execute(sql)
+            if need_commit:
+                conn.commit()
+                return None
+            return result
 
-    def commit(self):
-        self._conn.commit()
 
+def save_and_log(db: DB, logger: Logger):
+    def f_inner(func):
+        @wraps(func)
+        def s_inner(update, context):
+            db.execute(
+                f"INSERT INTO messages (src, tg_user_name, tg_id, date, text) "
+                f"VALUES ("
+                    f"'{json.dumps(literal_eval(str(update.message)))}', "
+                    f"'{update.message.chat.username}', "
+                    f"{update.message.chat.id}, "
+                    f"'{update.message.date}', "
+                    f"'{update.message.text}'"
+                f");",
+                need_commit=True
+            )
+            logger.info(f"New {func.__name__} request from {update.message.chat.username}[{update.message.chat.id}]. Source: {update.message.text}")
+            return func(update, context)
+        return s_inner
+    return f_inner
 
-def save_to_db(func, db):
-    @wraps(func)
-    def inner(*args, **kwargs):
-        db.execute(f"")
-        db.commit()
-    return inner
 

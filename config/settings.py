@@ -4,16 +4,16 @@ from os import path
 _bot_root = path.dirname(path.dirname(path.abspath(__file__)))
 
 BOT_TOKEN: str = None
-PATH_TO_FILE_WITH_TOKENS: str = None
+PATH_TO_FILE_WITH_TOKENS: str = None  # valid format: <token> <user_name>
 PATH_TO_BOT_DB: str = path.join(_bot_root, path.join("data", "bot_database.db"))
 LOG_PATH = path.join(_bot_root, path.join("data", "bot.log"))
 REQUEST_KWARGS = None
 _REQUEST_KWARGS_EXAMPLE = {
-    'proxy_url': 'socks5 OR socks5h://URL_OF_THE_PROXY_SERVER:PROXY_PORT',
+    "proxy_url": "socks5 OR socks5h://URL_OF_THE_PROXY_SERVER:PROXY_PORT",
     # Optional, if you need authentication:
-    'urllib3_proxy_kwargs': {
-        'username': 'PROXY_USER',
-        'password': 'PROXY_PASS',
+    "urllib3_proxy_kwargs": {
+        "username": "PROXY_USER",
+        "password": "PROXY_PASS",
     }
 }
 
