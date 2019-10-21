@@ -1,8 +1,9 @@
 import json
 import sqlite3
-from functools import wraps
-from logging import getLogger, Logger
 from ast import literal_eval
+from functools import wraps
+from logging import getLogger
+
 from config.settings import *
 
 logger = getLogger("general")
@@ -40,34 +41,59 @@ class DB:
     def __init__(self, db_path=PATH_TO_BOT_DB):
         self.db_path = db_path
 
-    def execute(self, sql, need_commit=False):
+    def execute(self, sql, *args, need_commit=False):
+        logger.info(f"sql query[need_commit={need_commit}]: {sql} with args: {args}")
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
-            result = cursor.execute(sql)
+            result = cursor.execute(sql, args)
             if need_commit:
                 conn.commit()
                 return None
             return result
 
 
-def save_and_log(db: DB, logger: Logger):
+bot_db = DB(PATH_TO_BOT_DB)
+ctf_db = DB(PATH_TO_CTF_DB)
+
+
+def calculate_points(user_name, total_points):
+    return total_points
+
+
+def permission(*allowed_roles: ["role field"]):
     def f_inner(func):
         @wraps(func)
         def s_inner(update, context):
-            db.execute(
-                f"INSERT INTO messages (src, tg_user_name, tg_id, date, text) "
-                f"VALUES ("
-                    f"'{json.dumps(literal_eval(str(update.message)))}', "
-                    f"'{update.message.chat.username}', "
-                    f"{update.message.chat.id}, "
-                    f"'{update.message.date}', "
-                    f"'{update.message.text}'"
-                f");",
-                need_commit=True
-            )
-            logger.info(f"New {func.__name__} request from {update.message.chat.username}[{update.message.chat.id}]. Source: {update.message.text}")
+            logger.info(f"Check permission of {update.message.chat.username}[{update.message.chat.id}]")
+            if not bot_db.execute(
+                    "SELECT 1 FROM user WHERE tg_id=? and role in (?)",
+                    update.message.chat.id, ",".join(v for v in allowed_roles)
+            ).fetchall():
+                update.message.reply_text("Not enough permissions or you are not authorized (use /auth)")
+                return None
             return func(update, context)
         return s_inner
     return f_inner
 
 
+def save_and_log(func):
+    @wraps(func)
+    def inner(update, context):
+        bot_db.execute(
+            "INSERT INTO messages (src, tg_user_name, tg_id, date, text) "
+            "VALUES (?, ?, ?, ?, ?);",
+            json.dumps(literal_eval(str(update.message))),
+            update.message.chat.username,
+            update.message.chat.id,
+            update.message.date,
+            update.message.text,
+            need_commit=True
+        )
+        logger.info(f"New {func.__name__} request from {update.message.chat.username}[{update.message.chat.id}]. Source: {update.message.text}")
+        return func(update, context)
+    return inner
+
+
+class role:
+    admin = "admin"
+    user = "user"

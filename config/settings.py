@@ -6,6 +6,7 @@ _bot_root = path.dirname(path.dirname(path.abspath(__file__)))
 BOT_TOKEN: str = None
 PATH_TO_FILE_WITH_TOKENS: str = None  # valid format: <token> <user_name>
 PATH_TO_BOT_DB: str = path.join(_bot_root, path.join("data", "bot_database.db"))
+PATH_TO_CTF_DB: str = None  # set abspath to sqlite database file
 LOG_PATH = path.join(_bot_root, path.join("data", "bot.log"))
 REQUEST_KWARGS = None
 _REQUEST_KWARGS_EXAMPLE = {
@@ -22,7 +23,7 @@ LOGGING = {
     "disable_existing_loggers": True,
     "formatters": {
         "base": {
-            "format":"%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            "format": "%(asctime)s %(levelname)s | %(pathname)s:%(funcName)s:%(lineno)d | %(message)s",
         },
     },
     "handlers": {
