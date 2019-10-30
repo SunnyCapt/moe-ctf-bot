@@ -3,6 +3,7 @@ from os import path
 
 _bot_root = path.dirname(path.dirname(path.abspath(__file__)))
 
+MOE_URL = 'http://localhost:3000/'
 BOT_TOKEN: str = None
 PATH_TO_FILE_WITH_TOKENS: str = None  # valid format: <token> <user_name>
 PATH_TO_BOT_DB: str = path.join(_bot_root, path.join("data", "bot_database.db"))
