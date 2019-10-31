@@ -3,13 +3,13 @@ from os import path
 
 _bot_root = path.dirname(path.dirname(path.abspath(__file__)))
 
-MOE_URL = 'http://localhost:3000/'
-BOT_TOKEN: str = None
-PATH_TO_FILE_WITH_TOKENS: str = None  # valid format: <token> <user_name>
+BOT_TOKEN = None
+MOE_URL = "http://localhost:3000/"
 PATH_TO_BOT_DB: str = path.join(_bot_root, path.join("data", "bot_database.db"))
-PATH_TO_CTF_DB: str = None  # set abspath to sqlite database file
 LOG_PATH = path.join(_bot_root, path.join("data", "bot.log"))
-REQUEST_KWARGS = None
+REQUEST_KWARGS = {
+    "proxy_url": "socks5://127.0.0.1:9050"
+}
 _REQUEST_KWARGS_EXAMPLE = {
     "proxy_url": "socks5 OR socks5h://URL_OF_THE_PROXY_SERVER:PROXY_PORT",
     # Optional, if you need authentication:

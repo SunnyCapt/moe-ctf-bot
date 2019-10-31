@@ -3,7 +3,7 @@ import sqlite3
 from ast import literal_eval
 from functools import wraps
 from logging import getLogger
-from typing import List, Dict
+from typing import Dict
 from urllib.parse import urljoin
 
 import requests
@@ -11,34 +11,6 @@ import requests
 from config.settings import *
 
 logger = getLogger("general")
-
-
-class User:
-    def __init__(self, file_path=PATH_TO_FILE_WITH_TOKENS):
-        self._file_path = file_path
-        self._users = {}
-
-    def update(self):
-        logger.info("Updating tokens")
-        with open(self._file_path) as data:
-            for line in data.readlines():
-                line = line.strip("\n").strip("\r").strip()
-                if not line:
-                    continue
-                try:
-                    key, value = line.split(" ")
-                    self._users.update({key: value})
-                except Exception as exc:
-                    logger.error(f"Wrong token-user_name value in {self._file_path}: {line} [{exc}]")
-        logger.info("Updated tokens")
-
-    def get_user_name(self, token) -> "user_name or None":
-        user_name = self._users.get(token)
-        if user_name is not None:
-            return user_name
-        self.update()
-        user_name = self._users.get(token)
-        return user_name
 
 
 class DB:
@@ -56,11 +28,6 @@ class DB:
 
 
 bot_db = DB(PATH_TO_BOT_DB)
-ctf_db = DB(PATH_TO_CTF_DB)
-
-
-def calculate_points(user_name, total_points):
-    return total_points
 
 
 def permission(allowed_role: str):
@@ -73,8 +40,9 @@ def permission(allowed_role: str):
                 "from role where name=(SELECT role FROM user WHERE tg_id=?)",
                 allowed_role,
                 update.message.chat.id
-            ).fetchall()
-            if is_allow and is_allow[0][0]:
+            ).fetchone()
+
+            if is_allow is None or is_allow and is_allow[0]:
                 update.message.reply_text("Not enough permissions or you are not authorized (use /auth or /start)")
                 return None
             return func(update, context)
@@ -125,53 +93,36 @@ class BadResponse(Exception):
 
 
 class Service:
-    # @classmethod
-    # def get_tasks(cls, task_id=None) -> List[Dict] or None:
-    #     url = urljoin(MOE_URL, f"api/tasks/{task_id if task_id is not None else ''}")
-    #     return cls._get_data(url)
-    #
-    # @classmethod
-    # def get_public_hints(cls, task_id=None):
-    #     url = urljoin(MOE_URL, f"hint{'s' if task_id is None else ''}")
-    #     kwargs = {'data': {'id': task_id}} if task_id is not None else {}
-    #     return cls._get_data(url, **kwargs)
-    #
-    # @staticmethod
-    # def login(username, password) -> str:
-    #     sess = requests.session()
-    #     sess.get(urljoin(MOE_URL, 'login'), data={'username': username, 'password': password})
-    #     sess.cookies
-
     @classmethod
     def render_tasks(cls, tasks):
-        assert 'tasks' is not None, AttributeError('parameter have not tasks field')
+        assert "tasks" is not None, AttributeError("parameter have not tasks field")
 
         solved_tasks = []
         unsolved_tasks = []
 
         for task in tasks:
-            if task.get('solved'):
+            if task.get("solved"):
                 solved_tasks.append(task)
             else:
-                unsolved_tasks.append(tasks)
+                unsolved_tasks.append(task)
 
         message = []
 
         message.append("<strong>Your solved tasks</strong>:\n")
         for task in solved_tasks:
             tmp = f"+ <strong>{task.get('name')}</strong> [<i>{task.get('categoryName')}</i>]\n" \
-                  f"\t\t\t\t\tPoints: {task.get('points')}\n" \
-                  f"\t\t\t\t\t<code>{task.get('content')}</code>\n"
+                f"\t\t\t\t\tPoints: {task.get('points')}\n" \
+                f"\t\t\t\t\t<code>{task.get('content')}</code>\n"
             message.append(tmp)
 
         message.append("<strong>Unsolved tasks</strong>:\n")
-        for task in solved_tasks:
+        for task in unsolved_tasks:
             tmp = f"- <strong>{task.get('name')}</strong> [<i>{task.get('categoryName')}</i>]\n" \
-                f"\t\t\t\t\tPoints: {task.get('points')}\n" \
-                f"\t\t\t\t\t<code>{task.get('content')}</code>\n" + \
-                f"\t\t\t\t\t/get_hint_{task.get('hint')['id']} [{task.get('hint')['price']}]\n" if task.get('hint') is not None else ""
+                      f"\t\t\t\t\tPoints: {task.get('points')}\n" \
+                      f"\t\t\t\t\t<code>{task.get('content')}</code>\n"
+            tmp += f"\t\t\t\t\t/get_hint_{task.get('id')} [{task.get('hint')['price']} coins]\n" if task.get('hint') is not None else ""
             message.append(tmp)
-            message = '\n'.join(message)
+        message = "\n".join(message)
         logger.info(f"Rendered task: {repr(message)}")
         return message
 
@@ -183,10 +134,27 @@ class Service:
 
     @classmethod
     def render_stats(cls, user):
-        message = f"<strong>Name</strong>: {user.get('name')}\n" \
-                  f"<strong>Points</strong>: {user.get('points')}\n" \
-                  f"<strong>Wallet</strong>: {user.get('wallet')}\n"
-        return message
+        if user is None:
+            return "We dont have info about it"
+        return f"<strong>Name</strong>: {user.get('name')}\n" \
+            f"<strong>Points</strong>: {user.get('points')}\n" \
+            f"<strong>Wallet</strong>: {user.get('wallet')}\n"
+
+    @classmethod
+    def render_hint(cls, task):
+        hint = task.get("hint")
+        if hint is None:
+            return "We dont have info about it"
+        return f"<strong>Hint for</strong>: {task.get('task_name', 'noname task')}\n" \
+            f"<strong>Price is</strong>: {hint.get('price')} coins\n" \
+            f"\nTo pay and get a hint, use the command:\n" \
+            f"/buy_hint_{hint.get('id')}"
+
+    @classmethod
+    def render_hint_content(cls, hint):
+        return f"<strong>Status</strong>: {hint.get('status')} coins\n" \
+            f"<strong>Hint</strong>: <code>{hint.get('hint')}</code>\n" \
+            f"\nFor check all your hints use command:\n/check_my_hints"
 
 
 class MoeAPI:
@@ -195,62 +163,63 @@ class MoeAPI:
         response = requests.post(url, **kwargs)
         if not response.ok:
             raise BadResponse()
-        if '/api/' in url and response.headers.get('Content-Type') != 'application/json; charset=utf-8':
+        if "/api/" in url and response.headers.get("Content-Type") != "application/json; charset=utf-8":
             raise AuthException()
         return response.json()
 
     @classmethod
-    def _check_auth(cls, cookies: Dict[str, str]):
+    def _is_valid_auth(cls, cookies: Dict[str, str]):
         logger.info(f"Checking auth for cookies: {cookies}")
-        url = urljoin(MOE_URL, 'api/tasks')
+        url = urljoin(MOE_URL, "api/tasks")
         try:
             cls._get_data(url, cookies=cookies)
         except AuthException:
             return False
         return True
 
-    # @classmethod
-    # def get_init_cookies(cls):
-    #     logger.info(f"Getting connect.sid cookie")
-    #     sess = requests.session()
-    #     sess.get(MOE_URL)
-    #     return str(sess.cookies.get_dict())
-
     @classmethod
-    def get_auth_cookies(cls, username, password) -> (int, str):
+    def get_auth_cookies(cls, username, password) -> dict:
         data = {
             "username": username,
             "password": password
         }
-        url = urljoin(MOE_URL, 'login')
+        url = urljoin(MOE_URL, "login")
         response = requests.post(url, data=data)
         auth_cookies = response.cookies.get_dict()
-        if cls._check_auth(auth_cookies) is None:
-            return None, None
-        moe_user_id = cls.get_moe_user_id(username, auth_cookies)
-        return moe_user_id, auth_cookies
+        if not cls._is_valid_auth(auth_cookies):
+            return None
+        return auth_cookies
 
     @classmethod
-    def get_moe_user(cls, username: str, cookies: Dict[str, str]) -> dict or None:
+    def get_moe_user(cls, username: str, cookies: Dict[str, str]) -> dict:
         """
         Getting user data by username
         :exception: AuthException if auth cookies is wrong
         """
-        url = urljoin(MOE_URL, 'api/users')
+        url = urljoin(MOE_URL, "api/users")
         response = cls._get_data(url, cookies=cookies)
-        user = list(filter(lambda u: u.get('name') == username, response['users']))
+        user = list(filter(lambda u: u.get("name") == username, response["users"]))
         if not user:
-            raise BadResponse(f'User {username} not found')
+            raise BadResponse(f"User {username} not found")
         return user[0]
 
     @classmethod
-    def get_tasks(cls, auth_cookie, task_id=None):
+    def get_tasks(cls, auth_cookie, task_id=None) -> list or dict:
         """
         Getting tasks by user auth
         :exception: AuthException if auth cookies is exexpired
         :return:
         """
-        url = urljoin(MOE_URL, f'api/tasks{("/" + str(task_id)) if task_id is not None else ""}')
-        return cls._get_data(url, cookies=auth_cookie).get('tasks')
+        url = urljoin(MOE_URL, f"api/tasks{('/' + str(task_id)) if task_id is not None else ''}")
+        data = cls._get_data(url, cookies=auth_cookie)
+        if "tasks" in data:
+            return data.get("tasks")
+        elif "task" in data:
+            return data.get("task")
+        raise BadResponse()
 
-
+    @classmethod
+    def get_hints(cls, auth_cookie, hint_id=None) -> list or dict:
+        url = urljoin(MOE_URL, f"api/{'wallet' if hint_id is None else ('pay/' + str(hint_id))}")
+        data = cls._get_data(url, cookies=auth_cookie)
+        return data.get("hints", []) if hint_id is None else data
