@@ -117,7 +117,7 @@ class Service:
                 f"\t\t\t\t\tPoints: {task.get('points')}\n" \
                 f"\t\t\t\t\t<code>{task.get('content')}</code>\n"
             tmp += f"\t\t\t\t\t/get_hint_{task.get('id')} [{task.get('hint')['price']} coins]\n" if task.get(
-                'hint') is not None else ""
+                "hint") is not None else ""
             message.append(tmp)
         message = "\n".join(message)
         logger.info(f"Rendered task: {repr(message)}")
@@ -125,6 +125,7 @@ class Service:
 
     @classmethod
     def get_auth_cookie(cls, tg_id):
+        logger.info(f"Getting auth cookie of {tg_id} tg_user")
         auth_cookie = bot_db.execute("SELECT cookies FROM user WHERE tg_id=?", tg_id).fetchone()
         if not (auth_cookie and auth_cookie[0]):
             raise AuthException("Auth is not valid")
@@ -186,6 +187,7 @@ class Service:
 class MoeAPI:
     @classmethod
     def _get_data(cls, url, **kwargs):
+        logger.info(f"Getting data. URL: {url}; kwargs: {kwargs}")
         response = requests.post(url, **kwargs)
         if not response.ok:
             raise BadResponse()
@@ -205,6 +207,7 @@ class MoeAPI:
 
     @classmethod
     def get_auth_cookies(cls, username, password) -> dict:
+        logger.info(f"Getting[creating] auth cookies for {username} with hash(pass) {hash(password)}")
         data = {
             "username": username,
             "password": password
@@ -222,6 +225,7 @@ class MoeAPI:
         Getting users
         :exception: AuthException if auth cookies is wrong
         """
+        logger.info(f"Getting user(s); username={username}")
         url = urljoin(MOE_URL, "api/users")
         response = cls._get_data(url, cookies=cookies)
 
@@ -240,6 +244,7 @@ class MoeAPI:
         :exception: AuthException if auth cookies is exexpired
         :return:
         """
+        logger.info(f"Getting task(s); task_id={task_id}")
         url = urljoin(MOE_URL, f"api/tasks{('/' + str(task_id)) if task_id is not None else ''}")
         data = cls._get_data(url, cookies=auth_cookie)
         if "tasks" in data:
@@ -250,6 +255,7 @@ class MoeAPI:
 
     @classmethod
     def get_hints(cls, auth_cookie, hint_id=None) -> list or dict:
+        logger.info(f"Getting hint(s); hint_id={hint_id}")
         url = urljoin(MOE_URL, f"api/{'wallet' if hint_id is None else ('pay/' + str(hint_id))}")
         data = cls._get_data(url, cookies=auth_cookie)
         return data.get("hints", []) if hint_id is None else data
