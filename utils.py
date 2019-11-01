@@ -42,8 +42,11 @@ def permission(allowed_role: str):
                 update.message.chat.id
             ).fetchone()
 
+            if allowed_role == role.unauthorized_user and is_allow is None:
+                is_allow = (0,)
+
             if is_allow is None or is_allow and is_allow[0]:
-                update.message.reply_text("Not enough permissions or you are not authorized (use /auth or /start)")
+                update.message.reply_text("Not enough permissions or you are not authorized (use /auth)")
                 return None
             return func(update, context)
 
@@ -52,21 +55,14 @@ def permission(allowed_role: str):
     return f_inner
 
 
-def save_and_log(func):
+def log(func):
     @wraps(func)
     def inner(update, context):
-        bot_db.execute(
-            "INSERT INTO messages (src, tg_user_name, tg_id, date, text) "
-            "VALUES (?, ?, ?, ?, ?);",
-            json.dumps(literal_eval(str(update.message))),
-            update.message.chat.username,
-            update.message.chat.id,
-            update.message.date,
-            update.message.text,
-            need_commit=True
-        )
         logger.info(
-            f"New {func.__name__} request from {update.message.chat.username}[{update.message.chat.id}]. Source: {update.message.text}")
+            f"New {func.__name__} request from "
+            f"{update.message.chat.username if hasattr(update.message.chat, 'username') else ''}[{update.message.chat.id}]. "
+            f"Source: {update.message.text}"
+        )
         return func(update, context)
 
     return inner
@@ -118,9 +114,10 @@ class Service:
         message.append("<strong>Unsolved tasks</strong>:\n")
         for task in unsolved_tasks:
             tmp = f"- <strong>{task.get('name')}</strong> [<i>{task.get('categoryName')}</i>]\n" \
-                      f"\t\t\t\t\tPoints: {task.get('points')}\n" \
-                      f"\t\t\t\t\t<code>{task.get('content')}</code>\n"
-            tmp += f"\t\t\t\t\t/get_hint_{task.get('id')} [{task.get('hint')['price']} coins]\n" if task.get('hint') is not None else ""
+                f"\t\t\t\t\tPoints: {task.get('points')}\n" \
+                f"\t\t\t\t\t<code>{task.get('content')}</code>\n"
+            tmp += f"\t\t\t\t\t/get_hint_{task.get('id')} [{task.get('hint')['price']} coins]\n" if task.get(
+                'hint') is not None else ""
             message.append(tmp)
         message = "\n".join(message)
         logger.info(f"Rendered task: {repr(message)}")
@@ -129,7 +126,8 @@ class Service:
     @classmethod
     def get_auth_cookie(cls, tg_id):
         auth_cookie = bot_db.execute("SELECT cookies FROM user WHERE tg_id=?", tg_id).fetchone()
-        assert auth_cookie and auth_cookie[0], AuthException()
+        if not (auth_cookie and auth_cookie[0]):
+            raise AuthException("Auth is not valid")
         return literal_eval(auth_cookie[0])
 
     @classmethod
@@ -156,6 +154,34 @@ class Service:
             f"<strong>Hint</strong>: <code>{hint.get('hint')}</code>\n" \
             f"\nFor check all your hints use command:\n/check_my_hints"
 
+    @classmethod
+    def render_users(cls, users):
+        message = []
+        for user in users:
+            message.append(cls.render_stats(user))
+        return "\n".join(message)
+
+    @classmethod
+    def render_hints_content(cls, hints):
+        message = []
+        for hint in hints:
+            message.append(
+                f"* <strong>{hint.get('taskName')}</strong> [<i>{hint.get('categoryName')}</i>]\n"
+                f"\t\t\t\t\t<code>{hint.get('taskContent')}</code>\n"
+                f"\t\t\t\t\tHint: <i>{hint.get('hint')}</i>"
+            )
+        return "".join(message) if message else "You have not hints"
+
+    @classmethod
+    def render_help(cls):
+        return "\n/auth &lt;username&gt; &lt;password&gt; - <code>авторизация</code>\n" \
+              "/get_stats - <code>информация о текущем юзере</code>\n" \
+              "/get_teams - <code>информация о всех командах</code>\n" \
+              "/get_tasks - <code>получение списка тасков</code>\n" \
+              "/get_hint_&lt;id&gt; - <code>получение информации о подсказке с указанным id</code>\n" \
+              "/get_hints - <code>получить все купленные подсказки</code>\n" \
+              "/buy_hint_&lt;id&gt; - <code>покупка подсказки с указанным id</code>"
+
 
 class MoeAPI:
     @classmethod
@@ -164,7 +190,7 @@ class MoeAPI:
         if not response.ok:
             raise BadResponse()
         if "/api/" in url and response.headers.get("Content-Type") != "application/json; charset=utf-8":
-            raise AuthException()
+            raise AuthException("auth is not valid")
         return response.json()
 
     @classmethod
@@ -191,13 +217,17 @@ class MoeAPI:
         return auth_cookies
 
     @classmethod
-    def get_moe_user(cls, username: str, cookies: Dict[str, str]) -> dict:
+    def get_moe_user(cls, cookies: Dict[str, str], username: str = None) -> dict:
         """
-        Getting user data by username
+        Getting users
         :exception: AuthException if auth cookies is wrong
         """
         url = urljoin(MOE_URL, "api/users")
         response = cls._get_data(url, cookies=cookies)
+
+        if username is None:
+            return response["users"]
+
         user = list(filter(lambda u: u.get("name") == username, response["users"]))
         if not user:
             raise BadResponse(f"User {username} not found")
