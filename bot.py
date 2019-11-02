@@ -76,7 +76,14 @@ def get_tasks(update, context):
         update.message.reply_text("Something broke")
         return
     result = Service.render_tasks(tasks)
-    update.message.reply_text(result, parse_mode=ParseMode.HTML)
+    tmp = ''
+    for i, task in enumerate(result):
+        tmp += '\n' + task
+        if i == len(result) - 1 or len(tmp) + len(result[i+1]) >= 4096:
+            update.message.reply_text(tmp, parse_mode=ParseMode.HTML)
+            tmp = ''
+
+
 
 
 @log

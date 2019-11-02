@@ -90,7 +90,7 @@ class BadResponse(Exception):
 
 class Service:
     @classmethod
-    def render_tasks(cls, tasks):
+    def render_tasks(cls, tasks) -> list:
         assert "tasks" is not None, AttributeError("parameter have not tasks field")
 
         solved_tasks = []
@@ -119,7 +119,7 @@ class Service:
             tmp += f"\t\t\t\t\t/get_hint_{task.get('id')} [{task.get('hint')['price']} coins]\n" if task.get(
                 "hint") is not None else ""
             message.append(tmp)
-        message = "\n".join(message)
+        # message = "\n".join(message)
         logger.info(f"Rendered task: {repr(message)}")
         return message
 
